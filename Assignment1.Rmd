@@ -1,16 +1,11 @@
 ---
-title: "ST3131"
+title: "Assignment"
 author: "Koo Yong Jie"
 date: "4/15/2021"
 output:
   word_document: default
   pdf_document: default
 ---
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = "~/SCHOOL STUFF/NUS/Y2S2/ST3131/Assignment")
-```
 
 ```{r load-libraries}
 library(tidyr)
