@@ -1,0 +1,279 @@
+---
+title: "ST3131"
+author: "Koo Yong Jie"
+date: "4/15/2021"
+output:
+  word_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = "~/SCHOOL STUFF/NUS/Y2S2/ST3131/Assignment")
+```
+
+```{r load-libraries}
+library(tidyr)
+library(knitr)
+library(psych)
+library(dplyr)
+library(MASS)
+library(leaps)
+library(lmridge)
+#library(interactions)
+```
+<p style= "color:blue">
+*1. Introduction*
+
+In this report, I will be investigating the differences in Forced Expiratory Volume (FEV), an index of pulmonary function that measures the volume of air expelled after 1 second of constant effort, among children aged 3 to 19 years. I have developed a linear regression model to predict FEV for the different ages using various variables in question.
+
+Using R, I first come begin exploring dataset of 654 entries, in particular, the response variable FEV and its relation with each of the regressors. Next, I explored the regressors themselves by considering any possible relationship between them. Then, I come up with a basic model and begin testing its appropriateness and adequacy. Finally, after considering the results from the regression output, a final model was created that I deemed most appropriate to represent the relationship between the regressors and FEV.
+</p>
+
+```{r read-dataset}
+data <- read.csv("FEV.csv", header = TRUE, sep = ',')
+data$Sex = as.factor(data$Sex)
+data$Smoke = as.factor(data$Smoke)
+attach(data)
+```
+
+```{r data_exploration1}
+pairs.panels(data[colnames(data)!="ID"], lm=TRUE, main = "Figure 1: Correlation Matrix")
+
+# response
+
+b1 <- boxplot(data$FEV, horizontal = T, col = "orange", xlab = "FEV", main = "Figure 2: Boxplot at 1.5 IQR")
+b2 <- boxplot(data$FEV, horizontal = T, range = 3, col = "orange", xlab = "FEV", main = "Figure 3: Boxplot at 3 IQR")
+b1$out
+
+h1 <- hist(data$FEV, main = "Figure 4: Histogram of response variable FEV", xlab = "FEV", col = "orange", labels = T, xlim = c(0, 6))
+
+qqnorm(data$FEV,ylab="Sample Quantiles for FEV", main = "Figure 5: QQ-plot of FEV")
+qqline(data$FEV,col="red")
+
+index <- describe(data$FEV)
+age <- describe(data$Age)
+ht <- describe(data$Hgt)
+ht_m <- describe(data$Hgt_m)
+tab<-rbind(index, age, ht, ht_m)
+tab$trimmed <- tab$mad <- tab$se <- NULL
+tab$vars[1]<-"FEV"
+tab$vars[2]<-"Age"
+tab$vars[3]<-"Height(in)"
+tab$vars[4]<-"Height(m)"
+kable(tab,row.names = F,caption = "Descriptive Statistics for FEV, Age, Height(in), Height(m)",digits = 3)
+
+#FEV to age
+plot(data$Age, data$FEV, pch=1, xlab = "Age", ylab = "FEV", main = "Figure 6: Scatterplot of FEV to Age", xlim = c(0,20), ylim = c(0,6))
+
+#FEV to Hgt_m
+plot(data$Hgt_m, data$FEV, xlab = "Height(m)", ylab = "FEV", main = "Figure 7: Scatterplot of FEV to Height(m)", xlim = c(1,2), ylim = c(0,6))
+
+boxplot(FEV~Sex, xlab = "Sex", names = c("Female", "Male"), ylab = "FEV", main = "Figure 8: Boxplot of FEV to Sex", col = "gold")
+boxplot(FEV~Smoke, xlab = "Smoke", names = c("Nonsmoker", "Smoker"), ylab = "FEV", main = "Figure 9: Boxplot of FEV to Smoke", col = "gold")
+```
+<p style= "color:blue">
+**2. Data Exploration**
+
+*2.1 Response FEV*
+The response FEV, regressors Hgt, Hgt_m and Age are continuous variables, while regressors Sex and Smoke are categorical variables. I took Hgt_m as the variable to be compared and use in modelling later as Hgt_m and Hgt are just measurements of the same thing, differing by a fixed factor, with correlation coefficient 1.00 as depicted in Figure 1.
+
+From the box plots (Figures 2 and 3), there are 9 outliers found from boxplot of 1.5 IQR and and none from the boxplot of 3 IQR for response variable FEV. In this case, the outliers are mild, so I choose to leave them intact.
+
+From the histogram of FEV (Figure 4), it appears that the distribution of data for FEV is single-peaked and sligthly right-skewed, from Table 1, FEV ranges from 0.79 to 5.79.
+
+The normal probability plot of FEV (Figure 5) also shows a slightly right-skewed distribution with the points forming an upward sloping curve.
+
+Overall, FEV is largely normal, hence no transformation of the response variable is required.
+
+The scatterplot of FEV to Age (Figure 6) seems to show a strong positive linear relationship between Age and FEV in general, with a correlation coefficient of 0.76 as depicted in Figure 1.
+
+<!-- When comparing across Sex (Figure 7), there remains the strong positive linear relationship between Age and FEV. However, FEV tend to be larger for older male children than older female children, hence a relatively steeper gradient for males than females, further supported by the best fit line drawn for each sex. This suggests that we can consider the interaction term Age * Sex when forming a model. -->
+
+<!-- When comparing across Smoke (Figure 6), there remains the strong positive linear relationship between Age and FEV. However, again, based on the best fit lines drawn, smokers exhibit a relatively steeper increasing pattern with age than nonsmokers , hence interaction between Age and Smoke can be considered. -->
+
+The scatterplot of FEV to Height(m) (Figure 7) both show a similar strong positive linear relationship between Hgt_m and FEV in general, with a correlation coefficient of 0.87 from Figure 1.
+
+<!-- Comparing either across Sex (Figure 7) or across Smoke (Figure 8), both males and females or smokers and nonsmokers exhibit the same general increasing pattern with height, further supported by the lines of best fit which have roughly the same gradient, hence there not be any interaction between Hgt_m and Sex or Hgt_m and Smoke. -->
+
+The boxplot of FEV to Sex (Figure 8) does not show any significant relationship between FEV and Sex as the median FEV are roughly the same for both sexes.
+
+The boxplot of FEV to Smoke (Figure 9) seems to show that smokers tends to have higher FEV as compared to nonsmokers as the median FEV for smokers is higher than that for nonsmokers.
+</p>
+```{r data_exploration2}
+#regressors
+
+plot(data$Age, data$Hgt_m, xlab = "Age", ylab = "Height(m)", main = "Figure 10: Scatterplot of Height(m) to Age", pch = 20)
+plot(data$Hgt, data$Hgt_m, xlab = "Height(in)", ylab = "Height(m)", main = "Figure 11: Scatterplot of Height(m) to Height(in)", pch = 20)
+
+boxplot(Age~Sex, xlab = "Sex", ylab = "Age", main = "Figure 12: Boxplot of Age to Sex", names = c("Female", "Male"), col = "gold")
+
+boxplot(Age~Smoke, xlab = "Smoking Status", ylab = "Age", main = "Figure 13: Boxplot of Age to Smoking Status", names = c("Non-smoker", "Smoker"), col = "gold")
+
+boxplot(Hgt_m~Sex, xlab = "Sex", ylab = "Height(m)", main = "Figure 14: Boxplot of Height(m) to Sex", names = c("Female", "Male"), col = "gold")
+
+boxplot(Hgt_m~Smoke, xlab = "Smoking Status", ylab = "Height(m)", main = "Figure 15: Boxplot of Height(m) to Smoking Status", names = c("Non-smoker", "Smoker"), col = "gold")
+
+smoke = factor(data$Smoke, labels = c('Non-Smoker', 'Smoker'))
+sex = factor(data$Sex, labels = c('Female', 'Male'))
+table(smoke,sex)
+```
+<p style= "color:blue">
+*2.2 Regressors*
+From the scatterplot of Hgt_m to Age (Figure 10), there appears to be a strong positive relationship between Age and Height, which is expected since children in this age range (of 3 - 19) tend to grow taller with age, supported by the large correlation positive coefficient of 0.79 from Figure 1. As such, Hgt_m would be a physical constraint and hence source of natural multicollinearity when building the model.
+
+As mentioned previously, the regressors Hgt and Hgt_m differ by just a fixed factor, hence Figure 11 clearly depicts their logical strong positive linear relationship, further supported by the perfect positive correlation coefficient of 1 from Figure 1.
+
+From the boxplots of Age to Sex (Figure 12), there does not appear to be a relationship between Age and Sex as for both sexes, the median, interquartile range and range are the same.
+
+From the boxplots of Age to Smoke (Figure 13), it seems that the larger the age, the more likely the child is a smoker, as the interquartile range of age as well as the median for smokers is entirely above that of non-smokers.
+
+From the boxplot of Hgt_m to Sex (Figure 14), the median height for males is roughly the same as that for females, suggesting that there might not be a relationship between Hgt_m and Sex.
+
+From the boxplot of Hgt_m to Smoke (Figure 15), the median height for smokers is higher than that for non-smokers, suggesting that there could be a relationship between Hgt_m and Smoke (smokers tend to be taller).
+
+From Table 2, there does not seem to be a relationship between Smoke and Sex as the number of non-smokers are larger for both sexes as compared to smokers.
+</p>
+```{r basicModel}
+#basic model
+m1 = lm(FEV~Age + Hgt_m + Smoke + Sex, data=data)
+summary(m1)
+anova(m1)
+
+#stepwise regression
+sw <- step(m1,  direction = c("both"))
+summary(sw)
+
+#model adequacy check
+plot(m1$fitted.values, rstandard(m1), xlab = "Fitted", ylab = "Standardised Resdiuals")
+abline(h=0)
+
+qqnorm(rstandard(m1), datax = T, ylab = "Standardised Residuals", xlab = "Z scores")
+qqline(rstandard(m1), datax = T)
+
+x<-cbind(Age, Hgt_m, Sex, Smoke)
+x<-cor(x)
+x
+
+C<-solve(x)  #this is (X'X)^(-1) where X'X is in correlation form
+VIF <- diag(C)
+VIF
+
+#condition number is:
+cond1 <- max(eigen(x)$values)/min(eigen(x)$values)
+cond1 #condition number > 1000 --> strong multicollinearity
+```
+<p style= "color:blue">
+**3. Choosing a Model**
+
+*3.1 Basic model*
+First model with all the regressors: $\widehat{FEV} = -4.449226 + 0.066086 * Age + 4.094782 * Hgt_m - 0.089377 * I(Smoke = 1) + 0.155678 * I(Sex = 1)$ with $R^2$ = 0.7745 which means that 77.45% of variability of response data around its mean is explained the model and a strong positive linear relationship between the response and the regressors.
+
+Hypotheses to test the significance of m1: H0: all coefficients = 0 and H1: at least a coefficient is non-zero.
+Test statistic: F = 557.3 ~ $F_{4,649}$ which has p-value < 2.2e-16. Hence, data provide strong evidence
+that model is significant.
+
+From the model summary statistics table, Smoke is less significant compared to the other regressors, with its coefficient having a p-value of 0.133.
+
+From the Anova table, it appears that Smoke is less significant in the model with its low $SS_R$ values. 
+
+*3.2 Stepwise regression model*
+Employing stepwise regression (Figure 16) based on the metric AIC using both forward and backward elimination so as not to underfit or overfit the data, we end up with the same model as the basic model with AIC value of -1151.90.
+
+*3.3 Model Evaluation*
+
+*3.3.1 Residual Plot*
+The residual plots of standardised residuals vs fitted values (Figure 17) seems to show an outward opening funnel and they cover a large range from -4 to 4.5, violating constant variance assumption, suggesting that a transformation should be done to the model.
+
+*3.3.2 Normal Probability Plot and Shapiro-Wilk Test*
+The normal probability plot of the standardised residuals (Figure 18) looks normal, with a large majority of point closely aligned to the line, though the right tail is slightly thinner.
+
+*3.3.3 Collinearity Analysis*
+From early analysis for Figure 10 with Figure 1 and now Table 3, there is a high correlation between Age and Hgt_m since $x_{12}$ = 0.7917857.
+
+Proceeding to check the Variation Inflation Factors (VIF) and Condition Number of the correlation matrix, none of the VIF values in Table 4 are > 10, and the condition number = 10.73429 < 100, hence there does not seem to be multicollinearity in the data.
+</p>
+
+```{r Interaction_term}
+#FEV to age based on sex and based on smokestatus
+male = data%>%filter(Sex==1)
+female = data%>%filter(Sex==0)
+plot(male$Age, male$FEV, pch=1, col="red", xlab = "Age", ylab = "FEV", main = "Scatterplot of FEV to Age (grouped by Sex)", xlim = c(0,20), ylim = c(0,6))
+points(female$Age, female$FEV, pch=2, col="blue")
+legend(0, 5, legend=c("Male", "Female"), col=c("red", "blue"), pch=1:2,  cex=0.8)
+abline(lm(FEV ~ Age, data = male), col = "blue")
+abline(lm(FEV ~ Age, data = female), col = "red")
+
+smoker = data%>%filter(Smoke==1)
+nonsmoker = data%>%filter(Smoke==0)
+plot(smoker$Age, smoker$FEV, pch=1, col="red", xlab = "Age", ylab = "FEV", main = "Scatterplot of FEV to Age (grouped by SmokeStatus)", xlim = c(0,20), ylim = c(0,6))
+points(nonsmoker$Age, nonsmoker$FEV, pch=2, col="blue")
+legend(0, 5, legend=c("Smoker", "Nonsmoker"), col=c("red", "blue"), pch=1:2,  cex=0.8)
+abline(lm(FEV ~ Age, data = smoker), col = "blue")
+abline(lm(FEV ~ Age, data = nonsmoker), col = "red")
+
+#FEV to Hgt_m based on sex and based on smokestatus
+plot(male$Hgt_m, male$FEV, xlab = "Height(m)", ylab = "FEV", main = "Scatterplot of FEV to Height(m) (grouped by Sex)", xlim = c(1,2), ylim = c(0,6), col = "red")
+points(female$Hgt_m, female$FEV, pch=2, col="blue")
+legend(1, 5, legend=c("Male", "Female"), col=c("red", "blue"), pch=1:2,  cex=0.8)
+abline(lm(FEV ~ Hgt_m, data = male), col = "blue")
+abline(lm(FEV ~ Hgt_m, data = female), col = "red")
+
+plot(smoker$Hgt_m, smoker$FEV, pch=1, col="red", xlab = "Age", ylab = "FEV", main = "Scatterplot of FEV to Height(m) (grouped by SmokeStatus)", xlim = c(1,2), ylim = c(0,6))
+points(nonsmoker$Hgt_m, nonsmoker$FEV, pch=2, col="blue")
+legend(1, 5, legend=c("Smoker", "Nonsmoker"), col=c("red", "blue"), pch=1:2,  cex=0.8)
+abline(lm(FEV ~ Hgt_m, data = smoker), col = "blue")
+abline(lm(FEV ~ Hgt_m, data = nonsmoker), col = "red")
+
+# interact_plot(lm(FEV~Age+Sex+Smoke+Hgt_m+Age*Sex), pred = Age, modx = Sex)
+# interact_plot(lm(FEV~Age+Sex+Smoke+Hgt_m+Age*Smoke), pred = Age, modx = Smoke)
+# interact_plot(lm(FEV~Age+Sex+Smoke+Hgt_m+Hgt_m*Sex), pred = Hgt_m, modx = Sex)
+# interact_plot(lm(FEV~Age+Sex+Smoke+Hgt_m+Hgt_m*Smoke), pred = Hgt_m, modx = Smoke)
+# interact_plot(lm(FEV~Age+Sex+Smoke+Hgt_m+Age*Hgt_m), pred = Age, modx = Hgt_m)
+```
+<p style= "color:blue">
+*3.4 Possibility of Interaction Terms / Higher-Order terms*
+Now, consider if there are any interaction effects between the regressors.
+
+From the scatterplot relating FEV to Age based on Sex (Figure 19), the linear correlation between Age and FEV differs for males and females. This suggests that we can consider the interaction term Age * Sex when forming a model.
+
+From the scatterplot relating FEV to Age based on Smoke (Figure 20), again a different linear correlation between Age and FEV is observed for smokers and nonsmokers, hence interaction between Age and Smoke can be considered as well.
+
+From the scatterplots relating FEV to Hgt_m based on Sex and on Smoke (Figures 21 and 22), both males and females or smokers and nonsmokers exhibit the same general increasing pattern with height with have roughly the same gradient, hence there may not be any interaction between Hgt_m and Sex or Hgt_m and Smoke.
+
+
+</p>
+
+
+```{r refit}
+boxcox(m1, lambda=seq(-2, 2, by=0.5), optimize=TRUE, plotit = TRUE)
+#The BoxCox plot suggest that lambda = 0 can be used.
+
+m2<-lm(log(FEV) ~ Age + Hgt_m + Smoke + Sex, data=data)
+summary(m2)
+anova(m2)
+
+#stepwise regression
+sw <- step(m2,  direction = c("both"))
+summary(sw)
+
+#model adequacy check
+plot(m2$fitted.values, rstandard(m2), xlab = "Fitted", ylab = "Standardised Resdiuals")
+abline(h=0)
+
+qqnorm(rstandard(m2), datax = T, ylab = "Standardised Residuals", xlab = "Z scores")
+qqline(rstandard(m2), datax = T)
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
