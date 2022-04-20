@@ -1,1 +1,1 @@
-# regression-assignment
+# model-selection (linear regression)
